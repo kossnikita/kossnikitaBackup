@@ -40,19 +40,19 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Setup JDK 21 (Gradle runtime)
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
 
       - name: Setup JDK 25 (toolchain)
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "25"
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Run unit tests
         shell: bash
@@ -63,7 +63,7 @@ jobs:
 
       - name: Upload test reports
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-reports
           path: |
@@ -82,19 +82,19 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Setup JDK 21 (Gradle runtime)
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
 
       - name: Setup JDK 25 (toolchain)
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "25"
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Build project
         shell: bash
@@ -104,7 +104,7 @@ jobs:
           ./gradlew --no-daemon clean build -x test -Dorg.gradle.java.installations.paths="$JAVA_HOME_25_X64"
 
       - name: Upload distributable jars
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: minecraft-borg-backup-jars
           path: |
