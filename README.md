@@ -43,6 +43,7 @@ timeout = "2h"
 
 [schedule]
 interval = "3h"
+run_on_startup = false
 # cron = "0 */3 * * *"
 
 [retention]

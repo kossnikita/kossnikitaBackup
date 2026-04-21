@@ -57,6 +57,10 @@ public final class FabricBackupMod implements ModInitializer {
 
             scheduler = new BackupScheduler();
             scheduler.start(config.schedule(), () -> backupManager.triggerBackupAsync("scheduler"));
+            if (config.schedule().runOnStartup()) {
+                backupManager.triggerBackupAsync("startup");
+                LOGGER.info(LOG_PREFIX + "Startup backup has been triggered (run_on_startup=true)");
+            }
             startBorgPreflight(config, borgExecutor);
 
             LOGGER.info(LOG_PREFIX + "Borg backup mod initialized (Fabric 26.1 mode)");
@@ -148,6 +152,7 @@ public final class FabricBackupMod implements ModInitializer {
             + "timeout = \"2h\"\n\n"
             + "[schedule]\n"
             + "interval = \"3h\"\n\n"
+            + "run_on_startup = false\n\n"
             + "[retention]\n"
             + "keep_last = 16\n"
             + "compact = false\n\n"

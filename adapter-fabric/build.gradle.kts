@@ -6,7 +6,6 @@ plugins {
 dependencies {
     compileOnly("net.fabricmc:fabric-loader:0.19.2")
     implementation(project(":core"))
-    runtimeOnly("org.slf4j:slf4j-simple:2.0.13")
 }
 
 tasks.shadowJar {

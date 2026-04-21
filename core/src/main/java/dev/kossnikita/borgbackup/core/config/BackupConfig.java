@@ -19,7 +19,7 @@ public record BackupConfig(
     HooksConfig hooks,
     WebhookConfig webhook
 ) {
-    public record ScheduleConfig(Duration interval, String cron) {
+    public record ScheduleConfig(Duration interval, String cron, boolean runOnStartup) {
     }
 
     public record RetentionConfig(int keepLast, boolean compact) {

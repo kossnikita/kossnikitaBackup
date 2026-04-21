@@ -56,11 +56,12 @@ public final class BackupConfigLoader {
 
     private static BackupConfig.ScheduleConfig readSchedule(TomlTable table) {
         if (table == null) {
-            return new BackupConfig.ScheduleConfig(Duration.ofHours(3), "");
+            return new BackupConfig.ScheduleConfig(Duration.ofHours(3), "", false);
         }
         Duration interval = parseDuration(orDefault(table.getString("interval"), "3h"));
         String cron = orDefault(table.getString("cron"), "");
-        return new BackupConfig.ScheduleConfig(interval, cron);
+        Boolean runOnStartup = table.getBoolean("run_on_startup");
+        return new BackupConfig.ScheduleConfig(interval, cron, runOnStartup != null && runOnStartup);
     }
 
     private static BackupConfig.RetentionConfig readRetention(TomlTable table) {
