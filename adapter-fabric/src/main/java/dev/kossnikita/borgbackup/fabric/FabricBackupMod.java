@@ -6,13 +6,16 @@ import dev.kossnikita.borgbackup.core.config.BackupConfigLoader;
 import dev.kossnikita.borgbackup.core.hooks.HookExecutor;
 import dev.kossnikita.borgbackup.core.notify.WebhookNotifier;
 import dev.kossnikita.borgbackup.core.process.BorgExecutor;
+import dev.kossnikita.borgbackup.core.process.CommandResult;
 import dev.kossnikita.borgbackup.core.schedule.BackupScheduler;
 import dev.kossnikita.borgbackup.core.status.BackupStatusStore;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.util.Base64;
+import java.util.List;
 import java.util.Properties;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
@@ -54,12 +57,39 @@ public final class FabricBackupMod implements ModInitializer {
 
             scheduler = new BackupScheduler();
             scheduler.start(config.schedule(), () -> backupManager.triggerBackupAsync("scheduler"));
+            startBorgPreflight(config, borgExecutor);
 
             LOGGER.info(LOG_PREFIX + "Borg backup mod initialized (Fabric 26.1 mode)");
             LOGGER.info(LOG_PREFIX + "Consistency mode: RCON save-off/save-all flush/save-on");
+            LOGGER.info(LOG_PREFIX + "Manual commands are not registered in this Fabric build; use scheduler from backup.toml");
         } catch (Exception e) {
             LOGGER.error(LOG_PREFIX + "Failed to initialize Borg backup mod", e);
         }
+    }
+
+    private void startBorgPreflight(BackupConfig config, BorgExecutor borgExecutor) {
+        Thread preflightThread = new Thread(() -> {
+            try {
+                LOGGER.info(LOG_PREFIX + "Borg preflight started: checking embedded runtime with 'borg --version'");
+                CommandResult result = borgExecutor.run(
+                    List.of("borg", "--version"),
+                    config.environment(),
+                    Duration.ofMinutes(2),
+                    config.workingDirectory()
+                );
+
+                if (result.success()) {
+                    String version = result.stdout() == null ? "" : result.stdout().trim();
+                    LOGGER.info(LOG_PREFIX + "Borg preflight successful. {}", version);
+                } else {
+                    LOGGER.error(LOG_PREFIX + "Borg preflight failed. stderr={} stdout={}", result.stderr(), result.stdout());
+                }
+            } catch (Exception e) {
+                LOGGER.error(LOG_PREFIX + "Borg preflight crashed", e);
+            }
+        }, "borgbackup-preflight");
+        preflightThread.setDaemon(true);
+        preflightThread.start();
     }
 
     private void ensureRconConsistency(Path gameDir) throws IOException {
