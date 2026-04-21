@@ -1,34 +1,29 @@
-import org.gradle.api.JavaVersion
-import org.gradle.api.plugins.JavaPluginExtension
-import org.gradle.api.tasks.compile.JavaCompile
-
 plugins {
-    id("java-library")
-    id("com.github.johnrengelman.shadow") version "8.1.1"
+    id("net.fabricmc.fabric-loom") version "1.16-SNAPSHOT"
+    id("maven-publish")
 }
 
 dependencies {
-    compileOnly("net.fabricmc:fabric-loader:0.19.2")
-    compileOnly("com.mojang:brigadier:1.0.18")
+    minecraft("com.mojang:minecraft:${property("minecraft_version")}")
+
+    implementation("net.fabricmc:fabric-loader:${property("fabric_loader_version")}")
+    implementation("net.fabricmc.fabric-api:fabric-api:${property("fabric_api_version")}")
+
     implementation(project(":core"))
-}
+    include(project(":core"))
 
-tasks.shadowJar {
-    archiveClassifier.set("")
-}
-
-tasks.build {
-    dependsOn(tasks.shadowJar)
+    include("org.tomlj:tomlj:1.1.1")
+    include("com.cronutils:cron-utils:9.2.1")
 }
 
 tasks.withType<JavaCompile>().configureEach {
     options.release.set(25)
 }
 
-extensions.configure<JavaPluginExtension> {
+java {
+    withSourcesJar()
     sourceCompatibility = JavaVersion.VERSION_25
     targetCompatibility = JavaVersion.VERSION_25
-    withSourcesJar()
 }
 
 tasks.processResources {
