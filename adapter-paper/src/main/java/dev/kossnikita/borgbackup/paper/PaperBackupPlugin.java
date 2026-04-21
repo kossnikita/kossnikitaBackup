@@ -7,7 +7,7 @@ import dev.kossnikita.borgbackup.core.config.BackupConfig;
 import dev.kossnikita.borgbackup.core.config.BackupConfigLoader;
 import dev.kossnikita.borgbackup.core.hooks.HookExecutor;
 import dev.kossnikita.borgbackup.core.notify.WebhookNotifier;
-import dev.kossnikita.borgbackup.core.process.BorgExecutor;
+import dev.kossnikita.borgbackup.core.process.ResticExecutor;
 import dev.kossnikita.borgbackup.core.schedule.BackupScheduler;
 import dev.kossnikita.borgbackup.core.status.BackupStatusStore;
 import java.io.IOException;
@@ -30,15 +30,15 @@ public final class PaperBackupPlugin extends JavaPlugin implements CommandExecut
             Path configPath = ensureBackupConfig();
             BackupConfig config = new BackupConfigLoader().load(configPath);
 
-            BorgExecutor borgExecutor = new BorgExecutor();
-            HookExecutor hookExecutor = new HookExecutor(borgExecutor);
+            ResticExecutor resticExecutor = new ResticExecutor();
+            HookExecutor hookExecutor = new HookExecutor(resticExecutor);
             WebhookNotifier webhookNotifier = new WebhookNotifier();
             BackupStatusStore statusStore = new BackupStatusStore();
 
             backupManager = new BackupManager(
                 config,
                 new PaperMinecraftAdapter(this),
-                borgExecutor,
+                resticExecutor,
                 hookExecutor,
                 webhookNotifier,
                 statusStore
@@ -48,9 +48,9 @@ public final class PaperBackupPlugin extends JavaPlugin implements CommandExecut
             scheduler.start(config.schedule(), () -> backupManager.triggerBackupAsync("scheduler"));
 
             Objects.requireNonNull(getCommand("backup"), "backup command missing in plugin.yml").setExecutor(this);
-            getLogger().info("Borg backup plugin enabled");
+            getLogger().info("Restic backup plugin enabled");
         } catch (Exception e) {
-            getLogger().severe("Failed to start Borg backup plugin: " + e.getMessage());
+            getLogger().severe("Failed to start Restic backup plugin: " + e.getMessage());
             getServer().getPluginManager().disablePlugin(this);
         }
     }
@@ -118,7 +118,7 @@ public final class PaperBackupPlugin extends JavaPlugin implements CommandExecut
             saveResource("backup.toml", false);
         }
 
-        Path secretFile = secretsDir.resolve("borg_passphrase.secret");
+        Path secretFile = secretsDir.resolve("restic_password.secret");
         if (Files.notExists(secretFile)) {
             Files.writeString(secretFile, "change-me");
         }

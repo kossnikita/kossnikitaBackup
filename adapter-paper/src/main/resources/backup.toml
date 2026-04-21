@@ -1,7 +1,7 @@
-repository = "user@backup:/backups/minecraft_repo"
+repository = "s3:https://garage.internal:3900/minecraft-backups"
 paths = ["./world", "./plugins"]
 exclude = ["logs/**", "crash-reports/**", "cache/**", "*.tmp", "session.lock"]
-compression = "lz4"
+compression = "auto"
 archive_prefix = "paper"
 working_directory = "."
 timeout = "2h"
@@ -16,13 +16,16 @@ keep_last = 16
 compact = false
 
 [environment]
-# BORG_RSH = "ssh -i ~/.ssh/id_ed25519"
-# BORG_EXECUTABLE = "./tools/borg/borg"
-# BORG_DOWNLOAD_URL = "https://github.com/borgbackup/borg/releases/download/1.4.4/borg-linux-glibc231-x86_64"
-# BORG_DOWNLOAD_SHA256 = "<sha256>"
+AWS_ACCESS_KEY_ID = "garage-access-key"
+AWS_SECRET_ACCESS_KEY = "garage-secret-key"
+AWS_REGION = "garage"
+AWS_ENDPOINT_URL = "https://garage.internal:3900"
+# RESTIC_EXECUTABLE = "./tools/restic/restic"
+# RESTIC_DOWNLOAD_URL = "https://example.com/restic"
+# RESTIC_DOWNLOAD_SHA256 = "<sha256>"
 
 [environment_files]
-BORG_PASSPHRASE = "secrets/borg_passphrase.secret"
+RESTIC_PASSWORD = "secrets/restic_password.secret"
 
 [retry]
 enabled = true

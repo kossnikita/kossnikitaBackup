@@ -3,8 +3,8 @@ package dev.kossnikita.borgbackup.core.process;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -16,14 +16,15 @@ import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public final class BorgExecutor {
-    private static final Logger LOGGER = LoggerFactory.getLogger(BorgExecutor.class);
-    private static final String ENV_BORG_EXECUTABLE = "BORG_EXECUTABLE";
-    private static final String ENV_BORG_DOWNLOAD_URL = "BORG_DOWNLOAD_URL";
-    private static final String ENV_BORG_DOWNLOAD_SHA256 = "BORG_DOWNLOAD_SHA256";
-    private static final String ENV_BORG_EMBEDDED_HOME = "BORG_EMBEDDED_HOME";
+public final class ResticExecutor implements BackupToolExecutor {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ResticExecutor.class);
+    private static final String ENV_RESTIC_EXECUTABLE = "RESTIC_EXECUTABLE";
+    private static final String ENV_RESTIC_DOWNLOAD_URL = "RESTIC_DOWNLOAD_URL";
+    private static final String ENV_RESTIC_DOWNLOAD_SHA256 = "RESTIC_DOWNLOAD_SHA256";
+    private static final String ENV_RESTIC_EMBEDDED_HOME = "RESTIC_EMBEDDED_HOME";
     private final ExecutorService ioExecutor = Executors.newCachedThreadPool();
 
+    @Override
     public CommandResult run(List<String> command, Map<String, String> environment, Duration timeout, String workingDirectory) {
         List<String> resolvedCommand;
         try {
@@ -34,11 +35,11 @@ public final class BorgExecutor {
 
         ProcessBuilder builder = new ProcessBuilder(resolvedCommand);
         builder.environment().putAll(environment);
-        builder.environment().remove(ENV_BORG_DOWNLOAD_URL);
-        builder.environment().remove(ENV_BORG_DOWNLOAD_SHA256);
-        builder.environment().remove(ENV_BORG_EMBEDDED_HOME);
-        if (!environment.containsKey(ENV_BORG_EXECUTABLE)) {
-            builder.environment().remove(ENV_BORG_EXECUTABLE);
+        builder.environment().remove(ENV_RESTIC_DOWNLOAD_URL);
+        builder.environment().remove(ENV_RESTIC_DOWNLOAD_SHA256);
+        builder.environment().remove(ENV_RESTIC_EMBEDDED_HOME);
+        if (!environment.containsKey(ENV_RESTIC_EXECUTABLE)) {
+            builder.environment().remove(ENV_RESTIC_EXECUTABLE);
         }
         if (workingDirectory != null && !workingDirectory.isBlank()) {
             builder.directory(new java.io.File(workingDirectory));
@@ -87,13 +88,17 @@ public final class BorgExecutor {
             return command;
         }
 
-        if (!"borg".equals(command.get(0))) {
+        if (!"restic".equals(command.get(0))) {
             return command;
         }
 
-        Path borgBinary = EmbeddedBorgBinaryResolver.resolve(environment, workingDirectory);
+        Path resticBinary = EmbeddedResticBinaryResolver.resolve(environment, workingDirectory);
+        if (resticBinary == null) {
+            return command;
+        }
+
         List<String> resolved = new ArrayList<>(command);
-        resolved.set(0, borgBinary.toString());
+        resolved.set(0, resticBinary.toString());
         return resolved;
     }
 
@@ -105,9 +110,9 @@ public final class BorgExecutor {
                 while ((line = reader.readLine()) != null) {
                     result.append(line).append(System.lineSeparator());
                     if (stderr) {
-                        LOGGER.warn("borg stderr: {}", line);
+                        LOGGER.warn("restic stderr: {}", line);
                     } else {
-                        LOGGER.info("borg stdout: {}", line);
+                        LOGGER.info("restic stdout: {}", line);
                     }
                 }
             } catch (IOException e) {

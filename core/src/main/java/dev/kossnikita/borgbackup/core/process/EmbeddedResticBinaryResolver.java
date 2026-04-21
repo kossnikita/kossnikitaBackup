@@ -15,27 +15,27 @@ import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Map;
 
-final class EmbeddedBorgBinaryResolver {
-    private static final String ENV_BORG_EXECUTABLE = "BORG_EXECUTABLE";
-    private static final String ENV_BORG_DOWNLOAD_URL = "BORG_DOWNLOAD_URL";
-    private static final String ENV_BORG_DOWNLOAD_SHA256 = "BORG_DOWNLOAD_SHA256";
-    private static final String ENV_BORG_EMBEDDED_HOME = "BORG_EMBEDDED_HOME";
+final class EmbeddedResticBinaryResolver {
+    private static final String ENV_RESTIC_EXECUTABLE = "RESTIC_EXECUTABLE";
+    private static final String ENV_RESTIC_DOWNLOAD_URL = "RESTIC_DOWNLOAD_URL";
+    private static final String ENV_RESTIC_DOWNLOAD_SHA256 = "RESTIC_DOWNLOAD_SHA256";
+    private static final String ENV_RESTIC_EMBEDDED_HOME = "RESTIC_EMBEDDED_HOME";
 
-    private EmbeddedBorgBinaryResolver() {
+    private EmbeddedResticBinaryResolver() {
     }
 
     static Path resolve(Map<String, String> environment, String workingDirectory) throws IOException {
-        String explicit = trimToNull(environment.get(ENV_BORG_EXECUTABLE));
+        String explicit = trimToNull(environment.get(ENV_RESTIC_EXECUTABLE));
         if (explicit != null) {
             Path explicitPath = Path.of(explicit).toAbsolutePath().normalize();
             if (!Files.exists(explicitPath)) {
-                throw new IOException("BORG_EXECUTABLE does not exist: " + explicitPath);
+                throw new IOException("RESTIC_EXECUTABLE does not exist: " + explicitPath);
             }
             ensureExecutable(explicitPath);
             return explicitPath;
         }
 
-        String fileName = isWindows() ? "borg.exe" : "borg";
+        String fileName = isWindows() ? "restic.exe" : "restic";
         Path home = resolveHome(environment, workingDirectory);
         Path binaryPath = home.resolve(fileName);
         if (Files.exists(binaryPath)) {
@@ -43,23 +43,15 @@ final class EmbeddedBorgBinaryResolver {
             return binaryPath;
         }
 
+        String downloadUrl = trimToNull(environment.get(ENV_RESTIC_DOWNLOAD_URL));
+        if (downloadUrl == null) {
+            return null;
+        }
+
         Files.createDirectories(home);
-
-        String downloadUrl = trimToNull(environment.get(ENV_BORG_DOWNLOAD_URL));
-        if (downloadUrl == null) {
-            downloadUrl = defaultDownloadUrl();
-        }
-
-        if (downloadUrl == null) {
-            throw new IOException(
-                "No embedded Borg binary configured for this OS/arch. "
-                    + "Set BORG_DOWNLOAD_URL (and optionally BORG_DOWNLOAD_SHA256) in [environment]."
-            );
-        }
-
         downloadBinary(downloadUrl, binaryPath);
 
-        String expectedSha = trimToNull(environment.get(ENV_BORG_DOWNLOAD_SHA256));
+        String expectedSha = trimToNull(environment.get(ENV_RESTIC_DOWNLOAD_SHA256));
         if (expectedSha != null) {
             verifySha256(binaryPath, expectedSha);
         }
@@ -69,7 +61,7 @@ final class EmbeddedBorgBinaryResolver {
     }
 
     private static Path resolveHome(Map<String, String> environment, String workingDirectory) {
-        String customHome = trimToNull(environment.get(ENV_BORG_EMBEDDED_HOME));
+        String customHome = trimToNull(environment.get(ENV_RESTIC_EMBEDDED_HOME));
         if (customHome != null) {
             return Path.of(customHome).toAbsolutePath().normalize();
         }
@@ -80,7 +72,7 @@ final class EmbeddedBorgBinaryResolver {
         } else {
             base = Path.of(System.getProperty("user.dir")).toAbsolutePath().normalize();
         }
-        return base.resolve(".borgbackup").resolve("bin");
+        return base.resolve(".resticbackup").resolve("bin");
     }
 
     private static void downloadBinary(String url, Path targetPath) throws IOException {
@@ -92,11 +84,11 @@ final class EmbeddedBorgBinaryResolver {
             response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IOException("Interrupted while downloading embedded Borg binary", e);
+            throw new IOException("Interrupted while downloading embedded restic binary", e);
         }
 
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            throw new IOException("Failed to download embedded Borg binary. HTTP status: " + response.statusCode());
+            throw new IOException("Failed to download embedded restic binary. HTTP status: " + response.statusCode());
         }
 
         Path tmp = targetPath.resolveSibling(targetPath.getFileName().toString() + ".tmp");
@@ -115,12 +107,12 @@ final class EmbeddedBorgBinaryResolver {
             byte[] bytes = Files.readAllBytes(file);
             actual = HexFormat.of().formatHex(digest.digest(bytes));
         } catch (Exception e) {
-            throw new IOException("Failed to verify SHA-256 for embedded Borg binary", e);
+            throw new IOException("Failed to verify SHA-256 for embedded restic binary", e);
         }
 
         if (!actual.equals(normalizedExpected)) {
             throw new IOException(
-                "Embedded Borg checksum mismatch. expected=" + normalizedExpected + " actual=" + actual
+                "Embedded restic checksum mismatch. expected=" + normalizedExpected + " actual=" + actual
             );
         }
     }
@@ -129,28 +121,8 @@ final class EmbeddedBorgBinaryResolver {
         try {
             path.toFile().setExecutable(true, false);
         } catch (SecurityException e) {
-            throw new IOException("Cannot mark Borg binary as executable: " + path, e);
+            throw new IOException("Cannot mark restic binary as executable: " + path, e);
         }
-    }
-
-    private static String defaultDownloadUrl() {
-        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
-        String arch = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
-
-        if (os.contains("linux") && (arch.equals("amd64") || arch.equals("x86_64"))) {
-            return "https://github.com/borgbackup/borg/releases/download/1.4.4/borg-linux-glibc231-x86_64";
-        }
-        if (os.contains("linux") && (arch.equals("aarch64") || arch.equals("arm64"))) {
-            return "https://github.com/borgbackup/borg/releases/download/1.4.4/borg-linux-glibc235-arm64-gh";
-        }
-        if (os.contains("mac") && (arch.equals("aarch64") || arch.equals("arm64"))) {
-            return "https://github.com/borgbackup/borg/releases/download/1.4.4/borg-macos-15-arm64-gh";
-        }
-        if (os.contains("mac") && (arch.equals("amd64") || arch.equals("x86_64"))) {
-            return "https://github.com/borgbackup/borg/releases/download/1.4.4/borg-macos-15-x86_64-gh";
-        }
-
-        return null;
     }
 
     private static boolean isWindows() {

@@ -1,7 +1,7 @@
-repository = "user@backup:/backups/minecraft_repo"
+repository = "s3:https://garage.internal:3900/minecraft-backups"
 paths = ["./world", "./mods"]
 exclude = ["logs/**", "crash-reports/**", "cache/**", "*.tmp", "session.lock"]
-compression = "lz4"
+compression = "auto"
 archive_prefix = "fabric"
 working_directory = "."
 timeout = "2h"
@@ -15,9 +15,13 @@ keep_last = 16
 compact = false
 
 [environment]
+AWS_ACCESS_KEY_ID = "garage-access-key"
+AWS_SECRET_ACCESS_KEY = "garage-secret-key"
+AWS_REGION = "garage"
+AWS_ENDPOINT_URL = "https://garage.internal:3900"
 
 [environment_files]
-BORG_PASSPHRASE = "secrets/borg_passphrase.secret"
+RESTIC_PASSWORD = "secrets/restic_password.secret"
 
 [retry]
 enabled = true

@@ -6,7 +6,7 @@ import dev.kossnikita.borgbackup.core.config.BackupConfig;
 import dev.kossnikita.borgbackup.core.config.BackupConfigLoader;
 import dev.kossnikita.borgbackup.core.hooks.HookExecutor;
 import dev.kossnikita.borgbackup.core.notify.WebhookNotifier;
-import dev.kossnikita.borgbackup.core.process.BorgExecutor;
+import dev.kossnikita.borgbackup.core.process.ResticExecutor;
 import dev.kossnikita.borgbackup.core.process.CommandResult;
 import dev.kossnikita.borgbackup.core.schedule.BackupScheduler;
 import dev.kossnikita.borgbackup.core.status.BackupStatusStore;
@@ -50,15 +50,15 @@ public final class FabricBackupMod implements ModInitializer {
             Path configPath = ensureBackupConfig();
             BackupConfig config = new BackupConfigLoader().load(configPath);
 
-            BorgExecutor borgExecutor = new BorgExecutor();
-            HookExecutor hookExecutor = new HookExecutor(borgExecutor);
+            ResticExecutor resticExecutor = new ResticExecutor();
+            HookExecutor hookExecutor = new HookExecutor(resticExecutor);
             WebhookNotifier webhookNotifier = new WebhookNotifier();
             BackupStatusStore statusStore = new BackupStatusStore();
 
             backupManager = new BackupManager(
                 config,
                 new ServerCommandMinecraftAdapter(() -> minecraftServer),
-                borgExecutor,
+                resticExecutor,
                 hookExecutor,
                 webhookNotifier,
                 statusStore
@@ -72,13 +72,13 @@ public final class FabricBackupMod implements ModInitializer {
                 backupManager.triggerBackupAsync("startup");
                 LOGGER.info(LOG_PREFIX + "Startup backup has been triggered (run_on_startup=true)");
             }
-            startBorgPreflight(config, borgExecutor);
+            startResticPreflight(config, resticExecutor);
 
-            LOGGER.info(LOG_PREFIX + "Borg backup mod initialized (Fabric 26.1 mode)");
+            LOGGER.info(LOG_PREFIX + "Restic backup mod initialized (Fabric 26.1 mode)");
             LOGGER.info(LOG_PREFIX + "Consistency mode: server commands save-off/save-all flush/save-on");
             LOGGER.info(LOG_PREFIX + "Registered commands: /backup now, /backup status");
         } catch (Exception e) {
-            LOGGER.error(LOG_PREFIX + "Failed to initialize Borg backup mod", e);
+            LOGGER.error(LOG_PREFIX + "Failed to initialize Restic backup mod", e);
         }
     }
 
@@ -152,12 +152,12 @@ public final class FabricBackupMod implements ModInitializer {
         source.sendFailure(Component.literal(message));
     }
 
-    private void startBorgPreflight(BackupConfig config, BorgExecutor borgExecutor) {
+    private void startResticPreflight(BackupConfig config, ResticExecutor resticExecutor) {
         Thread preflightThread = new Thread(() -> {
             try {
-                LOGGER.info(LOG_PREFIX + "Borg preflight started: checking embedded runtime with 'borg --version'");
-                CommandResult result = borgExecutor.run(
-                    List.of("borg", "--version"),
+                LOGGER.info(LOG_PREFIX + "Restic preflight started: checking runtime with 'restic version'");
+                CommandResult result = resticExecutor.run(
+                    List.of("restic", "version"),
                     config.environment(),
                     Duration.ofMinutes(2),
                     config.workingDirectory()
@@ -165,12 +165,12 @@ public final class FabricBackupMod implements ModInitializer {
 
                 if (result.success()) {
                     String version = result.stdout() == null ? "" : result.stdout().trim();
-                    LOGGER.info(LOG_PREFIX + "Borg preflight successful. {}", version);
+                    LOGGER.info(LOG_PREFIX + "Restic preflight successful. {}", version);
                 } else {
-                    LOGGER.error(LOG_PREFIX + "Borg preflight failed. stderr={} stdout={}", result.stderr(), result.stdout());
+                    LOGGER.error(LOG_PREFIX + "Restic preflight failed. stderr={} stdout={}", result.stderr(), result.stdout());
                 }
             } catch (Exception e) {
-                LOGGER.error(LOG_PREFIX + "Borg preflight crashed", e);
+                LOGGER.error(LOG_PREFIX + "Restic preflight crashed", e);
             }
         }, "borgbackup-preflight");
         preflightThread.setDaemon(true);
@@ -187,7 +187,7 @@ public final class FabricBackupMod implements ModInitializer {
             Files.writeString(backupToml, defaultToml());
         }
 
-        Path secretFile = secretsDir.resolve("borg_passphrase.secret");
+        Path secretFile = secretsDir.resolve("restic_password.secret");
         if (Files.notExists(secretFile)) {
             Files.writeString(secretFile, "change-me");
         }
@@ -196,10 +196,10 @@ public final class FabricBackupMod implements ModInitializer {
     }
 
     private String defaultToml() {
-        return "repository = \"user@backup:/backups/minecraft_repo\"\n"
+        return "repository = \"s3:https://garage.internal:3900/minecraft-backups\"\n"
             + "paths = [\"./world\", \"./mods\"]\n"
             + "exclude = [\"logs/**\", \"crash-reports/**\", \"cache/**\", \"*.tmp\", \"session.lock\"]\n"
-            + "compression = \"lz4\"\n"
+            + "compression = \"auto\"\n"
             + "archive_prefix = \"fabric\"\n"
             + "working_directory = \".\"\n"
             + "timeout = \"2h\"\n\n"
@@ -210,11 +210,15 @@ public final class FabricBackupMod implements ModInitializer {
             + "keep_last = 16\n"
             + "compact = false\n\n"
             + "[environment]\n"
-            + "# BORG_EXECUTABLE = \"./tools/borg/borg\"\n"
-            + "# BORG_DOWNLOAD_URL = \"https://github.com/borgbackup/borg/releases/download/1.4.4/borg-linux-glibc231-x86_64\"\n"
-            + "# BORG_DOWNLOAD_SHA256 = \"<sha256>\"\n\n"
+            + "AWS_ACCESS_KEY_ID = \"garage-access-key\"\n"
+            + "AWS_SECRET_ACCESS_KEY = \"garage-secret-key\"\n"
+            + "AWS_REGION = \"garage\"\n"
+            + "AWS_ENDPOINT_URL = \"https://garage.internal:3900\"\n"
+            + "# RESTIC_EXECUTABLE = \"./tools/restic/restic\"\n"
+            + "# RESTIC_DOWNLOAD_URL = \"https://example.com/restic\"\n"
+            + "# RESTIC_DOWNLOAD_SHA256 = \"<sha256>\"\n\n"
             + "[environment_files]\n"
-            + "BORG_PASSPHRASE = \"secrets/borg_passphrase.secret\"\n\n"
+            + "RESTIC_PASSWORD = \"secrets/restic_password.secret\"\n\n"
             + "[retry]\n"
             + "enabled = true\n"
             + "max_attempts = 2\n"

@@ -1,6 +1,6 @@
 package dev.kossnikita.borgbackup.core.hooks;
 
-import dev.kossnikita.borgbackup.core.process.BorgExecutor;
+import dev.kossnikita.borgbackup.core.process.BackupToolExecutor;
 import dev.kossnikita.borgbackup.core.process.CommandResult;
 import java.time.Duration;
 import java.util.List;
@@ -10,9 +10,9 @@ import org.slf4j.LoggerFactory;
 
 public final class HookExecutor {
     private static final Logger LOGGER = LoggerFactory.getLogger(HookExecutor.class);
-    private final BorgExecutor executor;
+    private final BackupToolExecutor executor;
 
-    public HookExecutor(BorgExecutor executor) {
+    public HookExecutor(BackupToolExecutor executor) {
         this.executor = executor;
     }
 

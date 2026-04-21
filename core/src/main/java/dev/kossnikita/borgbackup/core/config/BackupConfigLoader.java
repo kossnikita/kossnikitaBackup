@@ -23,7 +23,7 @@ public final class BackupConfigLoader {
         String repository = requiredString(result, "repository");
         List<String> paths = requiredArray(result, "paths");
         List<String> exclude = stringArray(result.getArray("exclude"));
-        String compression = orDefault(result.getString("compression"), "lz4");
+        String compression = orDefault(result.getString("compression"), "auto");
         String archivePrefix = orDefault(result.getString("archive_prefix"), "mc");
         String workingDirectory = orDefault(result.getString("working_directory"), ".");
         Duration timeout = parseDuration(orDefault(result.getString("timeout"), "2h"));

@@ -3,7 +3,7 @@ package dev.kossnikita.borgbackup.core;
 import dev.kossnikita.borgbackup.core.config.BackupConfig;
 import dev.kossnikita.borgbackup.core.hooks.HookExecutor;
 import dev.kossnikita.borgbackup.core.notify.WebhookNotifier;
-import dev.kossnikita.borgbackup.core.process.BorgExecutor;
+import dev.kossnikita.borgbackup.core.process.BackupToolExecutor;
 import dev.kossnikita.borgbackup.core.process.CommandResult;
 import dev.kossnikita.borgbackup.core.status.BackupStatusStore;
 import java.time.Duration;
@@ -26,7 +26,7 @@ public final class BackupManager {
 
     private final BackupConfig config;
     private final MinecraftAdapter adapter;
-    private final BorgExecutor borgExecutor;
+    private final BackupToolExecutor backupToolExecutor;
     private final HookExecutor hookExecutor;
     private final WebhookNotifier webhookNotifier;
     private final BackupStatusStore statusStore;
@@ -36,14 +36,14 @@ public final class BackupManager {
     public BackupManager(
         BackupConfig config,
         MinecraftAdapter adapter,
-        BorgExecutor borgExecutor,
+        BackupToolExecutor backupToolExecutor,
         HookExecutor hookExecutor,
         WebhookNotifier webhookNotifier,
         BackupStatusStore statusStore
     ) {
         this.config = config;
         this.adapter = adapter;
-        this.borgExecutor = borgExecutor;
+        this.backupToolExecutor = backupToolExecutor;
         this.hookExecutor = hookExecutor;
         this.webhookNotifier = webhookNotifier;
         this.statusStore = statusStore;
@@ -83,7 +83,7 @@ public final class BackupManager {
                 if (maybeRetried != null) {
                     return maybeRetried;
                 }
-                return finalizeStatus(started, BackupResult.FAILED, createResult, "Borg create failed");
+                return finalizeStatus(started, BackupResult.FAILED, createResult, "Restic backup failed");
             }
 
             CommandResult pruneResult = executePrune(env);
@@ -139,38 +139,35 @@ public final class BackupManager {
     }
 
     private CommandResult executeCreate(Map<String, String> env) {
-        String archive = config.archivePrefix() + "-" + ARCHIVE_TIME_FORMAT.format(Instant.now());
+        String snapshotTag = config.archivePrefix() + "-" + ARCHIVE_TIME_FORMAT.format(Instant.now());
         List<String> command = new ArrayList<>();
-        command.add("borg");
-        command.add("create");
+        command.add("restic");
+        command.add("backup");
+        command.add("-r");
+        command.add(config.repository());
         command.add("--compression");
         command.add(config.compression());
-        command.add("--stats");
+        command.add("--tag");
+        command.add(snapshotTag);
 
         for (String pattern : config.exclude()) {
             command.add("--exclude");
             command.add(pattern);
         }
 
-        command.add(config.repository() + "::" + archive);
         command.addAll(config.paths());
 
-        return borgExecutor.run(command, env, config.timeout(), config.workingDirectory());
+        return backupToolExecutor.run(command, env, config.timeout(), config.workingDirectory());
     }
 
     private CommandResult executePrune(Map<String, String> env) {
-        List<String> command = List.of(
-            "borg",
-            "prune",
-            "--keep-last=" + config.retention().keepLast(),
-            config.repository()
-        );
-        return borgExecutor.run(command, env, config.timeout(), config.workingDirectory());
+        List<String> command = List.of("restic", "forget", "-r", config.repository(), "--keep-last", String.valueOf(config.retention().keepLast()), "--prune");
+        return backupToolExecutor.run(command, env, config.timeout(), config.workingDirectory());
     }
 
     private CommandResult executeCompact(Map<String, String> env) {
-        List<String> command = List.of("borg", "compact", config.repository());
-        return borgExecutor.run(command, env, config.timeout(), config.workingDirectory());
+        List<String> command = List.of("restic", "prune", "-r", config.repository());
+        return backupToolExecutor.run(command, env, config.timeout(), config.workingDirectory());
     }
 
     private BackupResult finalizeStatus(Instant started, BackupResult result, CommandResult commandResult, String message) {
