@@ -12,3 +12,4 @@ out/
 config/borgbackup/secrets/
 **/secrets/*.secret
 tools/
+fabric-example-mod

@@ -11,7 +11,9 @@ import dev.kossnikita.borgbackup.core.process.CommandResult;
 import dev.kossnikita.borgbackup.core.schedule.BackupScheduler;
 import dev.kossnikita.borgbackup.core.status.BackupStatusStore;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.context.CommandContext;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,6 +23,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
 import org.slf4j.Logger;
@@ -60,7 +63,7 @@ public final class FabricBackupMod implements ModInitializer {
                 statusStore
             );
 
-            registerCommandsSafely();
+            registerCommands();
 
             scheduler = new BackupScheduler();
             scheduler.start(config.schedule(), () -> backupManager.triggerBackupAsync("scheduler"));
@@ -78,9 +81,10 @@ public final class FabricBackupMod implements ModInitializer {
         }
     }
 
-    private void registerCommandsSafely() {
+    private void registerCommands() {
         try {
             Class<?> callbackClass = Class.forName("net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback");
+            Class<?> eventApiClass = Class.forName("net.fabricmc.fabric.api.event.Event");
             Object event = callbackClass.getField("EVENT").get(null);
 
             Object callback = Proxy.newProxyInstance(
@@ -88,23 +92,47 @@ public final class FabricBackupMod implements ModInitializer {
                 new Class<?>[] { callbackClass },
                 (proxy, method, args) -> {
                     if ("register".equals(method.getName()) && args != null && args.length > 0) {
+                        if (args.length > 2 && !isDedicatedEnvironment(args[2])) {
+                            return null;
+                        }
                         registerBackupCommandOnDispatcher(args[0]);
                     }
                     return null;
                 }
             );
 
-            event.getClass().getMethod("register", Object.class).invoke(event, callback);
+            eventApiClass.getMethod("register", Object.class).invoke(event, callback);
         } catch (Exception e) {
             LOGGER.error(LOG_PREFIX + "Failed to register Fabric commands", e);
+        }
+    }
+
+    private boolean isDedicatedEnvironment(Object environment) {
+        if (environment == null) {
+            return true;
+        }
+        try {
+            Method method = environment.getClass().getMethod("includeDedicated");
+            Object result = method.invoke(environment);
+            return result instanceof Boolean value && value;
+        } catch (NoSuchMethodException ignored) {
+            try {
+                var field = environment.getClass().getField("includeDedicated");
+                Object result = field.get(environment);
+                return result instanceof Boolean value && value;
+            } catch (Exception ignoredToo) {
+                return true;
+            }
+        } catch (Exception e) {
+            return true;
         }
     }
 
     private void registerBackupCommandOnDispatcher(Object dispatcher) {
         try {
             LiteralArgumentBuilder<Object> root = LiteralArgumentBuilder.literal("backup")
-                .then(LiteralArgumentBuilder.<Object>literal("now").executes(ctx -> executeBackupNow()))
-                .then(LiteralArgumentBuilder.<Object>literal("status").executes(ctx -> executeBackupStatus()));
+                .then(LiteralArgumentBuilder.<Object>literal("now").executes(this::executeBackupNow))
+                .then(LiteralArgumentBuilder.<Object>literal("status").executes(this::executeBackupStatus));
 
             dispatcher.getClass().getMethod("register", LiteralArgumentBuilder.class).invoke(dispatcher, root);
         } catch (Exception e) {
@@ -112,27 +140,52 @@ public final class FabricBackupMod implements ModInitializer {
         }
     }
 
-    private int executeBackupNow() {
+    private int executeBackupNow(CommandContext<?> context) {
+        Object source = context.getSource();
+        if (!hasPermission(source, 2)) {
+            sendFailure(source, "You don't have permission to run /backup now");
+            return 0;
+        }
+
         BackupManager manager = backupManager;
         if (manager == null) {
+            sendFailure(source, "Backup manager is not initialized");
             LOGGER.error(LOG_PREFIX + "Command '/backup now' rejected: backup manager is not initialized");
             return 0;
         }
 
+        sendSuccess(source, "Starting backup...");
         LOGGER.info(LOG_PREFIX + "Command '/backup now' received");
         CompletableFuture<?> future = manager.triggerBackupAsync("command");
-        future.thenAccept(result -> LOGGER.info(LOG_PREFIX + "Command '/backup now' finished with result {}", result));
+        future.thenAccept(result -> {
+            sendSuccess(source, "Backup finished with result: " + result);
+            LOGGER.info(LOG_PREFIX + "Command '/backup now' finished with result {}", result);
+        });
         return 1;
     }
 
-    private int executeBackupStatus() {
+    private int executeBackupStatus(CommandContext<?> context) {
+        Object source = context.getSource();
+        if (!hasPermission(source, 2)) {
+            sendFailure(source, "You don't have permission to run /backup status");
+            return 0;
+        }
+
         BackupManager manager = backupManager;
         if (manager == null) {
-            LOGGER.error(LOG_PREFIX + "Command '/backup status' rejected: backup manager is not initialized");
+            sendFailure(source, "Backup manager is not initialized");
+            LOGGER.error(LOG_PREFIX + "Command '/backup now' rejected: backup manager is not initialized");
             return 0;
         }
 
         BackupStatus status = manager.status();
+        sendSuccess(source, "Last run: " + status.lastRun());
+        sendSuccess(source, "Duration: " + status.duration());
+        sendSuccess(source, "Result: " + status.result());
+        if (status.message() != null && !status.message().isBlank()) {
+            sendSuccess(source, "Message: " + status.message());
+        }
+
         LOGGER.info(
             LOG_PREFIX + "Status: lastRun={} duration={} result={} message={}",
             status.lastRun(),
@@ -141,6 +194,44 @@ public final class FabricBackupMod implements ModInitializer {
             status.message()
         );
         return 1;
+    }
+
+    private boolean hasPermission(Object source, int level) {
+        try {
+            Method method = source.getClass().getMethod("hasPermission", int.class);
+            Object result = method.invoke(source, level);
+            return result instanceof Boolean value && value;
+        } catch (Exception ignored) {
+            return true;
+        }
+    }
+
+    private void sendSuccess(Object source, String message) {
+        try {
+            Object component = literalComponent(message);
+            Supplier<Object> supplier = () -> component;
+            Method method = source.getClass().getMethod("sendSuccess", Supplier.class, boolean.class);
+            method.invoke(source, supplier, false);
+        } catch (Exception e) {
+            LOGGER.info(LOG_PREFIX + message);
+        }
+    }
+
+    private void sendFailure(Object source, String message) {
+        try {
+            Object component = literalComponent(message);
+            Class<?> componentClass = Class.forName("net.minecraft.network.chat.Component");
+            Method method = source.getClass().getMethod("sendFailure", componentClass);
+            method.invoke(source, component);
+        } catch (Exception e) {
+            LOGGER.warn(LOG_PREFIX + message);
+        }
+    }
+
+    private Object literalComponent(String text) throws Exception {
+        Class<?> componentClass = Class.forName("net.minecraft.network.chat.Component");
+        Method literal = componentClass.getMethod("literal", String.class);
+        return literal.invoke(null, text);
     }
 
     private void startBorgPreflight(BackupConfig config, BorgExecutor borgExecutor) {

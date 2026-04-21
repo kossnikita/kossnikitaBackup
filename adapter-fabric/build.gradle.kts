@@ -1,3 +1,7 @@
+import org.gradle.api.JavaVersion
+import org.gradle.api.plugins.JavaPluginExtension
+import org.gradle.api.tasks.compile.JavaCompile
+
 plugins {
     id("java-library")
     id("com.github.johnrengelman.shadow") version "8.1.1"
@@ -15,6 +19,16 @@ tasks.shadowJar {
 
 tasks.build {
     dependsOn(tasks.shadowJar)
+}
+
+tasks.withType<JavaCompile>().configureEach {
+    options.release.set(25)
+}
+
+extensions.configure<JavaPluginExtension> {
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+    withSourcesJar()
 }
 
 tasks.processResources {
