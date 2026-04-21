@@ -133,11 +133,11 @@ restic -r s3:https://garage.internal:3900/minecraft-backups snapshots
 
 1. При необходимости настройте бинарник restic:
 
-- `environment.RESTIC_DOWNLOAD_URL` - URL прямого бинарника restic для вашей OS/архитектуры
+- `environment.RESTIC_DOWNLOAD_URL` - URL бинарника restic для вашей OS/архитектуры (поддерживаются `.bz2` архивы)
 - `environment.RESTIC_DOWNLOAD_SHA256` - контрольная сумма SHA-256 для проверки скачанного файла
 - (опционально) `environment.RESTIC_EXECUTABLE` - путь к уже подготовленному бинарнику restic
 
-По умолчанию скачанный бинарник кешируется в `./.resticbackup/bin` относительно `working_directory`.
+Скачанный бинарник кешируется в `mods/restic/bin/` относительно `working_directory`. Для bz2-архивов распаковка происходит автоматически.
 
 Пример секрета:
 

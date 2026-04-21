@@ -14,6 +14,7 @@ import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Map;
+import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
 
 final class EmbeddedResticBinaryResolver {
     private static final String ENV_RESTIC_EXECUTABLE = "RESTIC_EXECUTABLE";
@@ -72,7 +73,7 @@ final class EmbeddedResticBinaryResolver {
         } else {
             base = Path.of(System.getProperty("user.dir")).toAbsolutePath().normalize();
         }
-        return base.resolve(".resticbackup").resolve("bin");
+        return base.resolve("mods").resolve("restic").resolve("bin");
     }
 
     private static void downloadBinary(String url, Path targetPath) throws IOException {
@@ -92,8 +93,17 @@ final class EmbeddedResticBinaryResolver {
         }
 
         Path tmp = targetPath.resolveSibling(targetPath.getFileName().toString() + ".tmp");
-        try (InputStream in = response.body(); OutputStream out = Files.newOutputStream(tmp)) {
-            in.transferTo(out);
+        try (InputStream in = response.body()) {
+            if (url.endsWith(".bz2")) {
+                try (BZip2CompressorInputStream bzIn = new BZip2CompressorInputStream(in);
+                     OutputStream out = Files.newOutputStream(tmp)) {
+                    bzIn.transferTo(out);
+                }
+            } else {
+                try (OutputStream out = Files.newOutputStream(tmp)) {
+                    in.transferTo(out);
+                }
+            }
         }
 
         Files.move(tmp, targetPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
