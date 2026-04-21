@@ -4,7 +4,7 @@ Monorepo with shared backup core and two runtime adapters:
 
 - `core`: backup orchestration, borg process execution, scheduling, retention, retries, hooks, webhooks
 - `adapter-paper`: Paper plugin entrypoint and `/backup now|status`
-- `adapter-fabric`: Fabric 26.1 мод с автоматическим планировщиком и RCON-consistency
+- `adapter-fabric`: Fabric 26.1 мод с автоматическим планировщиком и консистентностью через серверные команды
 
 ## Current Implementation Status
 
@@ -26,7 +26,7 @@ Implemented in this iteration:
 - TOML config loader with support for `.secret` files
 - Paper adapter commands: `/backup now`, `/backup status`
 - Fabric adapter for `Minecraft 26.1.x` only
-- Fabric consistency via RCON (`save-off` / `save-all flush` / `save-on`)
+- Fabric consistency via in-process server commands (`save-off` / `save-all flush` / `save-on`)
 
 ## Config Format
 
@@ -153,7 +153,7 @@ borg info user@backup:/backups/minecraft_repo
 1. Скопируйте JAR в `mods/`.
 2. Убедитесь, что установлен совместимый `fabric-api` для `26.1.x`.
 3. Запустите сервер один раз (создастся `config/borgbackup/backup.toml` и `config/borgbackup/secrets/borg_passphrase.secret`).
-4. Мод автоматически включает/настраивает RCON в `server.properties` для консистентности.
+4. Для консистентности мод использует серверные команды напрямую и не требует отдельной RCON-настройки.
 5. Отредактируйте `backup.toml` и `.secret`.
 6. Перезапустите сервер.
 

@@ -14,18 +14,17 @@ import com.mojang.brigadier.context.CommandContext;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.SecureRandom;
 import java.time.Duration;
-import java.util.Base64;
 import java.util.List;
-import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,6 +33,7 @@ public final class FabricBackupMod implements ModInitializer {
     private static final String LOG_PREFIX = "[borgbackup/fabric] ";
     private static volatile BackupScheduler scheduler;
     private static volatile BackupManager backupManager;
+    private static volatile MinecraftServer minecraftServer;
 
     @Override
     public void onInitialize() {
@@ -43,10 +43,11 @@ public final class FabricBackupMod implements ModInitializer {
             }
         }, "borgbackup-shutdown"));
 
+        ServerLifecycleEvents.SERVER_STARTED.register(server -> minecraftServer = server);
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> minecraftServer = null);
+
         try {
             Path configPath = ensureBackupConfig();
-            Path gameDir = FabricLoader.getInstance().getGameDir();
-            ensureRconConsistency(gameDir);
             BackupConfig config = new BackupConfigLoader().load(configPath);
 
             BorgExecutor borgExecutor = new BorgExecutor();
@@ -56,7 +57,7 @@ public final class FabricBackupMod implements ModInitializer {
 
             backupManager = new BackupManager(
                 config,
-                new RconMinecraftAdapter(gameDir),
+                new ServerCommandMinecraftAdapter(() -> minecraftServer),
                 borgExecutor,
                 hookExecutor,
                 webhookNotifier,
@@ -74,7 +75,7 @@ public final class FabricBackupMod implements ModInitializer {
             startBorgPreflight(config, borgExecutor);
 
             LOGGER.info(LOG_PREFIX + "Borg backup mod initialized (Fabric 26.1 mode)");
-            LOGGER.info(LOG_PREFIX + "Consistency mode: RCON save-off/save-all flush/save-on");
+            LOGGER.info(LOG_PREFIX + "Consistency mode: server commands save-off/save-all flush/save-on");
             LOGGER.info(LOG_PREFIX + "Registered commands: /backup now, /backup status");
         } catch (Exception e) {
             LOGGER.error(LOG_PREFIX + "Failed to initialize Borg backup mod", e);
@@ -174,34 +175,6 @@ public final class FabricBackupMod implements ModInitializer {
         }, "borgbackup-preflight");
         preflightThread.setDaemon(true);
         preflightThread.start();
-    }
-
-    private void ensureRconConsistency(Path gameDir) throws IOException {
-        Path serverPropertiesPath = gameDir.resolve("server.properties");
-        Properties properties = new Properties();
-
-        if (Files.exists(serverPropertiesPath)) {
-            try (var in = Files.newInputStream(serverPropertiesPath)) {
-                properties.load(in);
-            }
-        }
-
-        properties.setProperty("enable-rcon", "true");
-        properties.setProperty("broadcast-rcon-to-ops", "false");
-        properties.putIfAbsent("rcon.port", "25575");
-
-        String password = properties.getProperty("rcon.password", "").trim();
-        if (password.isEmpty()) {
-            byte[] random = new byte[24];
-            new SecureRandom().nextBytes(random);
-            password = Base64.getUrlEncoder().withoutPadding().encodeToString(random);
-            properties.setProperty("rcon.password", password);
-            LOGGER.warn(LOG_PREFIX + "RCON password was missing and has been generated in server.properties");
-        }
-
-        try (var out = Files.newOutputStream(serverPropertiesPath)) {
-            properties.store(out, "Managed by borgbackup for backup consistency");
-        }
     }
 
     private Path ensureBackupConfig() throws IOException {
