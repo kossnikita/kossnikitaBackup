@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "borgbackup",
+  "version": "${version}",
+  "name": "Borg Backup",
+  "description": "Incremental Borg backups for Fabric servers",
+  "authors": ["kossnikita"],
+  "license": "MIT",
+  "environment": "server",
+  "entrypoints": {
+    "main": [
+      "dev.kossnikita.borgbackup.fabric.FabricBackupMod"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "~1.21",
+    "fabric-api": "*"
+  }
+}

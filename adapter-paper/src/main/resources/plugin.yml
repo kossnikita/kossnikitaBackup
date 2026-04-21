@@ -1,0 +1,15 @@
+name: BorgBackup
+api: "1.21"
+main: dev.kossnikita.borgbackup.paper.PaperBackupPlugin
+version: 0.1.0-SNAPSHOT
+api-version: '1.21'
+authors:
+  - kossnikita
+commands:
+  backup:
+    description: Manage borg backups
+    usage: /backup <now|status>
+    permission: borgbackup.use
+permissions:
+  borgbackup.use:
+    default: op
