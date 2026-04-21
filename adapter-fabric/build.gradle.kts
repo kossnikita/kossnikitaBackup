@@ -1,15 +1,20 @@
 plugins {
-    id("fabric-loom") version "1.7-SNAPSHOT"
+    id("java-library")
+    id("com.github.johnrengelman.shadow") version "8.1.1"
 }
 
 dependencies {
-    minecraft("com.mojang:minecraft:${property("minecraft_version")}")
-    mappings("net.fabricmc:yarn:${property("yarn_mappings")}:v2")
-    modImplementation("net.fabricmc:fabric-loader:${property("fabric_loader_version")}")
-    modImplementation("net.fabricmc.fabric-api:fabric-api:${property("fabric_api_version")}")
-
+    compileOnly("net.fabricmc:fabric-loader:0.19.2")
     implementation(project(":core"))
     runtimeOnly("org.slf4j:slf4j-simple:2.0.13")
+}
+
+tasks.shadowJar {
+    archiveClassifier.set("")
+}
+
+tasks.build {
+    dependsOn(tasks.shadowJar)
 }
 
 tasks.processResources {
