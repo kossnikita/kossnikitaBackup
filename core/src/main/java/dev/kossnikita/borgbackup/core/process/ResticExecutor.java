@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -22,6 +23,9 @@ public final class ResticExecutor implements BackupToolExecutor {
     private static final String ENV_RESTIC_DOWNLOAD_URL = "RESTIC_DOWNLOAD_URL";
     private static final String ENV_RESTIC_DOWNLOAD_SHA256 = "RESTIC_DOWNLOAD_SHA256";
     private static final String ENV_RESTIC_EMBEDDED_HOME = "RESTIC_EMBEDDED_HOME";
+    private static final String ENV_TMPDIR = "TMPDIR";
+    private static final String ENV_TMP = "TMP";
+    private static final String ENV_TEMP = "TEMP";
     private final ExecutorService ioExecutor = Executors.newCachedThreadPool();
 
     @Override
@@ -43,6 +47,11 @@ public final class ResticExecutor implements BackupToolExecutor {
         }
         if (workingDirectory != null && !workingDirectory.isBlank()) {
             builder.directory(new java.io.File(workingDirectory));
+        }
+
+        String effectiveTempDir = configureTempDirectory(builder, environment, workingDirectory);
+        if (effectiveTempDir != null) {
+            LOGGER.info("Using temp directory for restic process: {}", effectiveTempDir);
         }
 
         LOGGER.info("Running command: {}", String.join(" ", resolvedCommand));
@@ -81,6 +90,42 @@ public final class ResticExecutor implements BackupToolExecutor {
         String out = stdoutFuture.join();
         String err = stderrFuture.join();
         return new CommandResult(process.exitValue(), false, out, err);
+    }
+
+    private String configureTempDirectory(ProcessBuilder builder, Map<String, String> environment, String workingDirectory) {
+        String configured = firstNonBlank(environment.get(ENV_TMPDIR), environment.get(ENV_TMP), environment.get(ENV_TEMP));
+        String tempDir = configured;
+
+        if (tempDir == null) {
+            Path base;
+            if (workingDirectory != null && !workingDirectory.isBlank()) {
+                base = Path.of(workingDirectory).toAbsolutePath().normalize();
+            } else {
+                base = Path.of(System.getProperty("user.dir")).toAbsolutePath().normalize();
+            }
+            tempDir = base.resolve("tmp").resolve("restic").toString();
+        }
+
+        try {
+            Files.createDirectories(Path.of(tempDir));
+        } catch (IOException e) {
+            LOGGER.warn("Failed to create temp directory {}. Falling back to system temp", tempDir, e);
+            return null;
+        }
+
+        builder.environment().put(ENV_TMPDIR, tempDir);
+        builder.environment().put(ENV_TMP, tempDir);
+        builder.environment().put(ENV_TEMP, tempDir);
+        return tempDir;
+    }
+
+    private static String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
     }
 
     private List<String> resolveCommand(List<String> command, Map<String, String> environment, String workingDirectory) throws IOException {
