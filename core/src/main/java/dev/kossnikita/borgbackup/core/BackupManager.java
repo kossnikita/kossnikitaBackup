@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
 public final class BackupManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(BackupManager.class);
     private static final DateTimeFormatter ARCHIVE_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC);
+    private static final String REPOSITORY_MISSING_TEXT = "repository does not exist";
 
     private final BackupConfig config;
     private final MinecraftAdapter adapter;
@@ -75,6 +76,16 @@ public final class BackupManager {
             adapter.flushSave().join();
 
             CommandResult createResult = executeCreate(env);
+            if (shouldInitializeRepository(createResult)) {
+                LOGGER.warn("Restic repository is missing. Trying automatic initialization for {}", config.repository());
+                CommandResult initResult = executeRepositoryInit(env);
+                if (!initResult.success()) {
+                    return finalizeStatus(started, BackupResult.FAILED, initResult, "Restic repository initialization failed");
+                }
+
+                createResult = executeCreate(env);
+            }
+
             if (createResult.timedOut()) {
                 return finalizeStatus(started, BackupResult.TIMEOUT, createResult, "Backup timed out");
             }
@@ -168,6 +179,24 @@ public final class BackupManager {
     private CommandResult executeCompact(Map<String, String> env) {
         List<String> command = List.of("restic", "prune", "-r", config.repository());
         return backupToolExecutor.run(command, env, config.timeout(), config.workingDirectory());
+    }
+
+    private CommandResult executeRepositoryInit(Map<String, String> env) {
+        List<String> command = List.of("restic", "init", "-r", config.repository());
+        return backupToolExecutor.run(command, env, config.timeout(), config.workingDirectory());
+    }
+
+    private boolean shouldInitializeRepository(CommandResult createResult) {
+        if (createResult == null || createResult.success() || createResult.timedOut()) {
+            return false;
+        }
+
+        String stderr = createResult.stderr();
+        if (stderr == null || stderr.isBlank()) {
+            return false;
+        }
+
+        return stderr.toLowerCase().contains(REPOSITORY_MISSING_TEXT);
     }
 
     private BackupResult finalizeStatus(Instant started, BackupResult result, CommandResult commandResult, String message) {
