@@ -16,6 +16,9 @@ compact = false
 
 [environment]
 # BORG_RSH = "ssh -i ~/.ssh/id_ed25519"
+# BORG_EXECUTABLE = "./tools/borg/borg"
+# BORG_DOWNLOAD_URL = "https://github.com/borgbackup/borg/releases/download/1.4.4/borg-linux-glibc231-x86_64"
+# BORG_DOWNLOAD_SHA256 = "<sha256>"
 
 [environment_files]
 BORG_PASSPHRASE = "secrets/borg_passphrase.secret"
