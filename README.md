@@ -23,6 +23,7 @@ Implemented in this iteration:
 - Retry policy after failed backup
 - Hook support (`pre`, `post`)
 - Webhook notifications (`start`, `success`, `failure`)
+- Automatic skip when no player activity has been observed since the previous backup run
 - TOML config loader with support for `.secret` files
 - Paper adapter commands: `/backup now`, `/backup status`
 - Fabric adapter for `Minecraft 26.1.x` only

@@ -20,6 +20,7 @@ import java.util.concurrent.CompletableFuture;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -33,6 +34,7 @@ public final class FabricBackupMod implements ModInitializer {
     private static final String LOG_PREFIX = "[borgbackup/fabric] ";
     private static volatile BackupScheduler scheduler;
     private static volatile BackupManager backupManager;
+    private static volatile ServerCommandMinecraftAdapter minecraftAdapter;
     private static volatile MinecraftServer minecraftServer;
 
     @Override
@@ -55,14 +57,23 @@ public final class FabricBackupMod implements ModInitializer {
             WebhookNotifier webhookNotifier = new WebhookNotifier();
             BackupStatusStore statusStore = new BackupStatusStore();
 
+            minecraftAdapter = new ServerCommandMinecraftAdapter(() -> minecraftServer);
+
             backupManager = new BackupManager(
                 config,
-                new ServerCommandMinecraftAdapter(() -> minecraftServer),
+                minecraftAdapter,
                 resticExecutor,
                 hookExecutor,
                 webhookNotifier,
                 statusStore
             );
+
+            ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
+                ServerCommandMinecraftAdapter adapter = minecraftAdapter;
+                if (adapter != null) {
+                    adapter.markPlayerActivity();
+                }
+            });
 
             registerCommands();
 

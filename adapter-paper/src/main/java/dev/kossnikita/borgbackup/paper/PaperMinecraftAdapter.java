@@ -1,6 +1,7 @@
 package dev.kossnikita.borgbackup.paper;
 
 import dev.kossnikita.borgbackup.core.MinecraftAdapter;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.CompletableFuture;
 import org.bukkit.Bukkit;
 import org.bukkit.command.ConsoleCommandSender;
@@ -8,9 +9,19 @@ import org.bukkit.plugin.Plugin;
 
 public final class PaperMinecraftAdapter implements MinecraftAdapter {
     private final Plugin plugin;
+    private final AtomicBoolean playerActivitySinceLastBackup = new AtomicBoolean(false);
 
     public PaperMinecraftAdapter(Plugin plugin) {
         this.plugin = plugin;
+    }
+
+    @Override
+    public boolean consumePlayerActivityFlag() {
+        return playerActivitySinceLastBackup.getAndSet(false);
+    }
+
+    public void markPlayerActivity() {
+        playerActivitySinceLastBackup.set(true);
     }
 
     @Override

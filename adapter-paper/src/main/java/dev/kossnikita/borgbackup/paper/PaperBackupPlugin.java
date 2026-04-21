@@ -18,11 +18,15 @@ import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
-public final class PaperBackupPlugin extends JavaPlugin implements CommandExecutor {
+public final class PaperBackupPlugin extends JavaPlugin implements CommandExecutor, Listener {
     private BackupManager backupManager;
     private BackupScheduler scheduler;
+    private PaperMinecraftAdapter minecraftAdapter;
 
     @Override
     public void onEnable() {
@@ -34,10 +38,11 @@ public final class PaperBackupPlugin extends JavaPlugin implements CommandExecut
             HookExecutor hookExecutor = new HookExecutor(resticExecutor);
             WebhookNotifier webhookNotifier = new WebhookNotifier();
             BackupStatusStore statusStore = new BackupStatusStore();
+            minecraftAdapter = new PaperMinecraftAdapter(this);
 
             backupManager = new BackupManager(
                 config,
-                new PaperMinecraftAdapter(this),
+                minecraftAdapter,
                 resticExecutor,
                 hookExecutor,
                 webhookNotifier,
@@ -48,6 +53,7 @@ public final class PaperBackupPlugin extends JavaPlugin implements CommandExecut
             scheduler.start(config.schedule(), () -> backupManager.triggerBackupAsync("scheduler"));
 
             Objects.requireNonNull(getCommand("backup"), "backup command missing in plugin.yml").setExecutor(this);
+            getServer().getPluginManager().registerEvents(this, this);
             getLogger().info("Restic backup plugin enabled");
         } catch (Exception e) {
             getLogger().severe("Failed to start Restic backup plugin: " + e.getMessage());
@@ -105,6 +111,13 @@ public final class PaperBackupPlugin extends JavaPlugin implements CommandExecut
                 sender.sendMessage(ChatColor.YELLOW + "Usage: /backup <now|status>");
                 return true;
             }
+        }
+    }
+
+    @EventHandler
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        if (minecraftAdapter != null) {
+            minecraftAdapter.markPlayerActivity();
         }
     }
 

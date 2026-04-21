@@ -65,6 +65,12 @@ public final class BackupManager {
 
     private BackupResult runBackup(String source) {
         Instant started = Instant.now();
+
+        if (!adapter.consumePlayerActivityFlag()) {
+            CommandResult skippedResult = new CommandResult(0, false, "", "");
+            return finalizeStatus(started, BackupResult.SKIPPED_NO_PLAYER_ACTIVITY, skippedResult, "No player activity since last backup, skipping");
+        }
+
         webhookNotifier.notify(config.webhook(), "backup_start", "Backup started: " + source);
 
         Map<String, String> env = config.environment();
@@ -212,6 +218,9 @@ public final class BackupManager {
         if (result == BackupResult.SUCCESS) {
             webhookNotifier.notify(config.webhook(), "backup_success", mergedMessage);
             LOGGER.info("Backup success in {} seconds", duration.toSeconds());
+        } else if (result == BackupResult.SKIPPED_NO_PLAYER_ACTIVITY || result == BackupResult.SKIPPED_ALREADY_RUNNING) {
+            webhookNotifier.notify(config.webhook(), "backup_skipped", mergedMessage);
+            LOGGER.info("Backup skipped: {}", mergedMessage);
         } else {
             webhookNotifier.notify(config.webhook(), "backup_failed", mergedMessage);
             LOGGER.error("Backup failed result={} message={}", result, mergedMessage);
