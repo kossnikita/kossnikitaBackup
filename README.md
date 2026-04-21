@@ -160,7 +160,59 @@ borg info user@backup:/backups/minecraft_repo
 Важно для Fabric:
 
 - Текущая версия таргетирует только `Minecraft 26.1.x`.
-- Ручные команды `/backup now|status` в Fabric-адаптере не используются, бэкапы идут через scheduler из `backup.toml`.
+- Ручные команды доступны: `/backup now` и `/backup status`.
+
+### 6) Развертывание в Pterodactyl (рекомендуемый сценарий)
+
+В Pterodactyl-контейнерах часто нет имени пользователя для текущего UID, поэтому `ssh-keygen` внутри контейнера может падать с ошибкой `No user exists for uid ...`.
+Самый удобный и стабильный путь: готовить SSH-ключ вне контейнера и копировать внутрь.
+
+1. На локальной машине или на отдельном хосте сгенерируйте ключ:
+
+```bash
+ssh-keygen -t ed25519 -f borgbackup_ed25519 -N "" -C "borgbackup"
+```
+
+1. Скопируйте ключи в контейнер:
+
+- `borgbackup_ed25519` -> `/home/container/config/borgbackup/secrets/ed25519`
+- `borgbackup_ed25519.pub` -> `/home/container/config/borgbackup/secrets/ed25519.pub`
+
+1. Выставьте права в контейнере:
+
+```bash
+chmod 600 /home/container/config/borgbackup/secrets/ed25519
+chmod 644 /home/container/config/borgbackup/secrets/ed25519.pub
+```
+
+1. Добавьте публичный ключ на backup-бэкенд в `authorized_keys` нужного пользователя.
+
+1. Подготовьте `known_hosts` в контейнере:
+
+```bash
+ssh-keyscan -H <backup-host> >> /home/container/config/borgbackup/secrets/known_hosts
+chmod 644 /home/container/config/borgbackup/secrets/known_hosts
+```
+
+1. В `backup.toml` задайте SSH транспорт для Borg:
+
+```toml
+[environment]
+BORG_RSH = "ssh -i /home/container/config/borgbackup/secrets/ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/home/container/config/borgbackup/secrets/known_hosts"
+```
+
+1. Для Fabric удобно включить запуск бэкапа сразу при старте:
+
+```toml
+[schedule]
+run_on_startup = true
+```
+
+1. Проверьте в логах, что preflight проходит:
+
+- `[borgbackup/fabric] Borg preflight successful. borg ...`
+
+Если preflight успешен, встроенный Borg runtime работает, а дальше можно отлаживать только SSH/доступ к репозиторию.
 
 ## Notes About Security
 
@@ -173,7 +225,7 @@ borg info user@backup:/backups/minecraft_repo
 - `/backup now`: triggers async backup run
 - `/backup status`: prints last run time, duration, result, and stats
 
-> Commands apply to Paper adapter. Fabric 26.1 adapter currently uses scheduled runs.
+> Commands apply to both Paper and Fabric adapters.
 
 ## Build
 

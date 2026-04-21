@@ -5,6 +5,7 @@ plugins {
 
 dependencies {
     compileOnly("net.fabricmc:fabric-loader:0.19.2")
+    compileOnly("com.mojang:brigadier:1.0.18")
     implementation(project(":core"))
 }
 
