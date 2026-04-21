@@ -15,6 +15,7 @@ dependencies {
     include("org.tomlj:tomlj:1.1.1")
     include("org.antlr:antlr4-runtime:4.11.1")
     include("com.cronutils:cron-utils:9.2.1")
+    include("org.apache.commons:commons-compress:1.26.0")
 }
 
 tasks.withType<JavaCompile>().configureEach {
