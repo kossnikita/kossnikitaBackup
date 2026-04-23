@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.loader.api.FabricLoader;
@@ -71,6 +72,13 @@ public final class FabricBackupMod implements ModInitializer {
             ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
                 ServerCommandMinecraftAdapter adapter = minecraftAdapter;
                 if (adapter != null) {
+                    adapter.markPlayerActivity();
+                }
+            });
+
+            ServerTickEvents.END_SERVER_TICK.register(server -> {
+                ServerCommandMinecraftAdapter adapter = minecraftAdapter;
+                if (adapter != null && !server.getPlayerList().getPlayers().isEmpty()) {
                     adapter.markPlayerActivity();
                 }
             });

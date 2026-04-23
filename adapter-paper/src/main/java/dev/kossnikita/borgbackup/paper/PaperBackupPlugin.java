@@ -52,6 +52,12 @@ public final class PaperBackupPlugin extends JavaPlugin implements CommandExecut
             scheduler = new BackupScheduler();
             scheduler.start(config.schedule(), () -> backupManager.triggerBackupAsync("scheduler"));
 
+            getServer().getScheduler().runTaskTimer(this, () -> {
+                if (minecraftAdapter != null && !getServer().getOnlinePlayers().isEmpty()) {
+                    minecraftAdapter.markPlayerActivity();
+                }
+            }, 20L, 20L * 60L);
+
             Objects.requireNonNull(getCommand("backup"), "backup command missing in plugin.yml").setExecutor(this);
             getServer().getPluginManager().registerEvents(this, this);
             getLogger().info("Restic backup plugin enabled");
